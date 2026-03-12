@@ -1,7 +1,7 @@
-/* Shop page - purchase themes and styles with coins/gems */
+/* Shop page - purchase themes, backgrounds, and styles with coins/gems */
 import { motion } from 'framer-motion';
-import { ShoppingBag, Check } from 'lucide-react';
-import { SHOP_ITEMS } from '@/types';
+import { ShoppingBag, Check, Paintbrush } from 'lucide-react';
+import { SHOP_ITEMS, BACKGROUND_STYLES } from '@/types';
 import { Button } from '@/components/ui/button';
 
 interface ShopProps {
@@ -9,7 +9,7 @@ interface ShopProps {
 }
 
 export default function Shop({ store }: ShopProps) {
-  const { state, purchaseItem } = store;
+  const { state, purchaseItem, setActiveBackground } = store;
 
   const groupedItems = {
     theme: SHOP_ITEMS.filter(i => i.type === 'theme'),
@@ -57,6 +57,7 @@ export default function Shop({ store }: ShopProps) {
             const canAfford = item.currency === 'coins'
               ? state.user.coins >= item.price
               : state.user.gems >= item.price;
+            const isActiveBackground = item.type === 'background' && state.user.activeBackground === item.value;
 
             return (
               <motion.div
@@ -64,17 +65,45 @@ export default function Shop({ store }: ShopProps) {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="bg-card rounded-2xl p-4 shadow-card flex items-center gap-4"
+                className={`bg-card rounded-2xl p-4 shadow-card flex items-center gap-4 ${isActiveBackground ? 'ring-2 ring-primary' : ''}`}
               >
+                {/* Background preview swatch */}
+                {item.type === 'background' && item.preview && (
+                  <div
+                    className="w-10 h-10 rounded-xl shrink-0 border border-border"
+                    style={{ background: item.preview }}
+                  />
+                )}
+
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-semibold text-foreground">{item.name}</h3>
                   <p className="text-xs text-muted-foreground">{item.description}</p>
                 </div>
+
+                {/* Actions */}
                 {owned ? (
-                  <div className="flex items-center gap-1 text-cat-sport">
-                    <Check className="h-4 w-4" />
-                    <span className="text-xs font-medium">Kupione</span>
-                  </div>
+                  item.type === 'background' ? (
+                    isActiveBackground ? (
+                      <div className="flex items-center gap-1 text-primary">
+                        <Paintbrush className="h-4 w-4" />
+                        <span className="text-xs font-medium">Aktywne</span>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setActiveBackground(item.value)}
+                        className="shrink-0"
+                      >
+                        Użyj
+                      </Button>
+                    )
+                  ) : (
+                    <div className="flex items-center gap-1 text-cat-sport">
+                      <Check className="h-4 w-4" />
+                      <span className="text-xs font-medium">Kupione</span>
+                    </div>
+                  )
                 ) : (
                   <Button
                     size="sm"
@@ -88,6 +117,18 @@ export default function Shop({ store }: ShopProps) {
               </motion.div>
             );
           })}
+
+          {/* Reset background button */}
+          {type === 'background' && state.user.activeBackground !== 'none' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveBackground('none')}
+              className="text-xs text-muted-foreground"
+            >
+              Resetuj tło do domyślnego
+            </Button>
+          )}
         </div>
       ))}
     </motion.div>

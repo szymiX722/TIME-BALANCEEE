@@ -2,11 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   AppState, DayData, ActivityEntry, Category, Quest, QuestProgress,
-  DEFAULT_CATEGORIES, DEFAULT_QUESTS, UserData
+  DEFAULT_CATEGORIES, QUEST_POOL, UserData
 } from '@/types';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const STORAGE_KEY = 'dayflow-data';
+const ACTIVE_QUEST_COUNT = 3;
 
 const defaultUser: UserData = {
   coins: 0,
@@ -19,28 +21,45 @@ const defaultUser: UserData = {
   darkMode: false,
 };
 
+/* Pick random quests from pool, excluding given IDs */
+function pickRandomQuests(count: number, excludeIds: string[]): string[] {
+  const available = QUEST_POOL.filter(q => !excludeIds.includes(q.id));
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count).map(q => q.id);
+}
+
 const getInitialState = (): AppState => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Merge with defaults for forward-compat
-      return {
+      const state: AppState = {
         categories: parsed.categories || DEFAULT_CATEGORIES,
         days: parsed.days || {},
-        quests: parsed.quests || DEFAULT_QUESTS,
+        quests: QUEST_POOL, // always use full pool
+        activeQuests: parsed.activeQuests || [],
         questProgress: parsed.questProgress || [],
         user: { ...defaultUser, ...parsed.user },
         undoStack: [],
       };
+      // Ensure 3 active quests
+      if (state.activeQuests.length < ACTIVE_QUEST_COUNT) {
+        const needed = ACTIVE_QUEST_COUNT - state.activeQuests.length;
+        const newPicks = pickRandomQuests(needed, state.activeQuests);
+        state.activeQuests = [...state.activeQuests, ...newPicks];
+      }
+      return state;
     }
   } catch (e) {
     console.error('Failed to load state:', e);
   }
+
+  const initialActive = pickRandomQuests(ACTIVE_QUEST_COUNT, []);
   return {
     categories: DEFAULT_CATEGORIES,
     days: {},
-    quests: DEFAULT_QUESTS,
+    quests: QUEST_POOL,
+    activeQuests: initialActive,
     questProgress: [],
     user: defaultUser,
     undoStack: [],
@@ -96,12 +115,18 @@ export function useAppStore() {
       }
     });
 
-    // Normalize to 0-100 scale
-    const maxPossible = 3 * totalMinutes; // max weight is 3
-    const minPossible = -2 * totalMinutes; // min weight is -2
+    const maxPossible = 3 * totalMinutes;
+    const minPossible = -2 * totalMinutes;
     const normalized = ((weightedSum - minPossible) / (maxPossible - minPossible)) * 100;
     return Math.round(Math.min(100, Math.max(0, normalized)));
   }, [state.categories]);
+
+  /* Get active quest objects */
+  const getActiveQuests = useCallback((): Quest[] => {
+    return state.activeQuests
+      .map(id => QUEST_POOL.find(q => q.id === id))
+      .filter((q): q is Quest => !!q);
+  }, [state.activeQuests]);
 
   const addEntry = useCallback((categoryId: string, minutes: number) => {
     setState(prev => {
@@ -115,12 +140,17 @@ export function useAppStore() {
       const newEntries = [...dayData.entries, newEntry];
       const dopamineScore = calculateDopamineScore(newEntries);
 
-      // Check quest completion
+      // Check quest completion - only for active quests
       let coinsEarned = 0;
       let gemsEarned = 0;
       const newQuestProgress = [...prev.questProgress];
+      let newActiveQuests = [...prev.activeQuests];
+      const completedQuestTitles: string[] = [];
 
-      prev.quests.forEach(quest => {
+      prev.activeQuests.forEach(questId => {
+        const quest = QUEST_POOL.find(q => q.id === questId);
+        if (!quest) return;
+
         const alreadyCompleted = prev.questProgress.some(
           qp => qp.questId === quest.id && qp.date === today && qp.completed
         );
@@ -134,8 +164,30 @@ export function useAppStore() {
           newQuestProgress.push({ questId: quest.id, date: today, completed: true });
           coinsEarned += quest.rewardCoins;
           gemsEarned += quest.rewardGems;
+          completedQuestTitles.push(quest.title);
+
+          // Replace completed quest with a new one
+          const excludeIds = newActiveQuests;
+          const replacement = pickRandomQuests(1, excludeIds);
+          if (replacement.length > 0) {
+            newActiveQuests = newActiveQuests.map(id =>
+              id === questId ? replacement[0] : id
+            );
+          }
         }
       });
+
+      // Show toast notifications for completed quests
+      if (completedQuestTitles.length > 0) {
+        setTimeout(() => {
+          completedQuestTitles.forEach(title => {
+            toast.success(`🎉 Quest ukończony: ${title}`, {
+              description: `+${coinsEarned} 🪙 ${gemsEarned > 0 ? `+${gemsEarned} 💎` : ''}`,
+              duration: 4000,
+            });
+          });
+        }, 100);
+      }
 
       return {
         ...prev,
@@ -143,13 +195,26 @@ export function useAppStore() {
           ...prev.days,
           [today]: { ...dayData, entries: newEntries, dopamineScore },
         },
+        activeQuests: newActiveQuests,
         questProgress: newQuestProgress,
         user: {
           ...prev.user,
           coins: prev.user.coins + coinsEarned,
           gems: prev.user.gems + gemsEarned,
         },
-        undoStack: [...prev.undoStack.slice(-9), { type: 'addEntry', data: { entryId: newEntry.id, date: today } }],
+        undoStack: [...prev.undoStack.slice(-9), {
+          type: 'addEntry',
+          data: {
+            entryId: newEntry.id,
+            date: today,
+            coinsEarned,
+            gemsEarned,
+            completedQuestIds: completedQuestTitles.length > 0
+              ? newQuestProgress.filter(qp => qp.date === today && qp.completed).map(qp => qp.questId)
+              : [],
+            previousActiveQuests: prev.activeQuests,
+          }
+        }],
       };
     });
   }, [today, calculateDopamineScore]);
@@ -170,6 +235,7 @@ export function useAppStore() {
     });
   }, [calculateDopamineScore]);
 
+  /* Undo properly reverses quest rewards and entry */
   const undo = useCallback(() => {
     setState(prev => {
       if (prev.undoStack.length === 0) return prev;
@@ -177,16 +243,35 @@ export function useAppStore() {
       const newStack = prev.undoStack.slice(0, -1);
 
       if (lastAction.type === 'addEntry') {
-        const { entryId, date } = lastAction.data as { entryId: string; date: string };
+        const { entryId, date, coinsEarned, gemsEarned, completedQuestIds, previousActiveQuests } =
+          lastAction.data as {
+            entryId: string; date: string;
+            coinsEarned: number; gemsEarned: number;
+            completedQuestIds: string[];
+            previousActiveQuests: string[];
+          };
         const dayData = prev.days[date];
         if (!dayData) return { ...prev, undoStack: newStack };
         const newEntries = dayData.entries.filter(e => e.id !== entryId);
         const dopamineScore = calculateDopamineScore(newEntries);
+
+        // Reverse quest progress
+        const newQuestProgress = prev.questProgress.filter(
+          qp => !completedQuestIds.includes(qp.questId) || qp.date !== date
+        );
+
         return {
           ...prev,
           days: {
             ...prev.days,
             [date]: { ...dayData, entries: newEntries, dopamineScore },
+          },
+          activeQuests: previousActiveQuests || prev.activeQuests,
+          questProgress: newQuestProgress,
+          user: {
+            ...prev.user,
+            coins: prev.user.coins - (coinsEarned || 0),
+            gems: prev.user.gems - (gemsEarned || 0),
           },
           undoStack: newStack,
         };
@@ -232,6 +317,13 @@ export function useAppStore() {
     });
   }, []);
 
+  const setActiveBackground = useCallback((value: string) => {
+    setState(prev => ({
+      ...prev,
+      user: { ...prev.user, activeBackground: value },
+    }));
+  }, []);
+
   const toggleDarkMode = useCallback(() => {
     setState(prev => ({
       ...prev,
@@ -275,9 +367,11 @@ export function useAppStore() {
     updateCategory,
     removeCategory,
     purchaseItem,
+    setActiveBackground,
     toggleDarkMode,
     addQuest,
     exportCSV,
     calculateDopamineScore,
+    getActiveQuests,
   };
 }

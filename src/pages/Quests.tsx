@@ -1,20 +1,20 @@
-/* Quests page - daily quests with gamification */
+/* Quests page - daily quests with gamification and rotation */
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Flame, Trophy } from 'lucide-react';
+import { CheckCircle2, Circle, Flame, Trophy, Sparkles } from 'lucide-react';
 import { getIcon } from '@/lib/icons';
-import { format } from 'date-fns';
 
 interface QuestsProps {
   store: ReturnType<typeof import('@/hooks/useAppStore').useAppStore>;
 }
 
 export default function Quests({ store }: QuestsProps) {
-  const { state, today, getTodayData } = store;
+  const { state, today, getTodayData, getActiveQuests } = store;
   const dayData = getTodayData();
+  const activeQuests = getActiveQuests();
 
   const questStatus = useMemo(() => {
-    return state.quests.map(quest => {
+    return activeQuests.map(quest => {
       const completed = state.questProgress.some(
         qp => qp.questId === quest.id && qp.date === today && qp.completed
       );
@@ -25,7 +25,7 @@ export default function Quests({ store }: QuestsProps) {
       const cat = state.categories.find(c => c.id === quest.categoryId);
       return { quest, completed, currentMinutes, progress, category: cat };
     });
-  }, [state.quests, state.questProgress, today, dayData.entries, state.categories]);
+  }, [activeQuests, state.questProgress, today, dayData.entries, state.categories]);
 
   const completedCount = questStatus.filter(q => q.completed).length;
   const allCompleted = completedCount === questStatus.length && questStatus.length > 0;
@@ -69,7 +69,9 @@ export default function Quests({ store }: QuestsProps) {
           animate={{ scale: 1, opacity: 1 }}
           className="bg-accent rounded-2xl p-4 text-center"
         >
+          <Sparkles className="h-6 w-6 mx-auto mb-2 text-primary" />
           <p className="text-lg font-semibold text-accent-foreground">🎉 Wszystkie questy ukończone!</p>
+          <p className="text-xs text-muted-foreground mt-1">Nowe questy pojawią się jutro</p>
         </motion.div>
       )}
 
@@ -83,7 +85,7 @@ export default function Quests({ store }: QuestsProps) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.08 }}
-              className={`bg-card rounded-2xl p-4 shadow-card ${completed ? 'opacity-70' : ''}`}
+              className={`bg-card rounded-2xl p-4 shadow-card transition-all ${completed ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start gap-3">
                 <div
@@ -96,7 +98,9 @@ export default function Quests({ store }: QuestsProps) {
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="text-sm font-semibold text-foreground">{quest.title}</h3>
                     {completed ? (
-                      <CheckCircle2 className="h-5 w-5 text-cat-sport" />
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}>
+                        <CheckCircle2 className="h-5 w-5 text-cat-sport" />
+                      </motion.div>
                     ) : (
                       <Circle className="h-5 w-5 text-muted-foreground" />
                     )}
