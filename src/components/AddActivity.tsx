@@ -1,4 +1,4 @@
-/* Quick-add activity dialog */
+/* Quick-add activity dialog — uses a proper dialog for full visibility */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Clock } from 'lucide-react';
@@ -26,10 +26,18 @@ export function AddActivity({ categories, onAdd }: AddActivityProps) {
     setMinutes(30);
   };
 
+  const handleClose = () => {
+    // Just close — no rewards granted, no data saved
+    setOpen(false);
+    setSelectedCategory(null);
+    setMinutes(30);
+  };
+
   const quickMinutes = [15, 30, 45, 60, 90, 120];
 
   return (
     <>
+      {/* FAB */}
       <motion.button
         whileTap={{ scale: 0.92 }}
         onClick={() => setOpen(true)}
@@ -38,26 +46,28 @@ export function AddActivity({ categories, onAdd }: AddActivityProps) {
         <Plus className="h-6 w-6 text-primary-foreground" />
       </motion.button>
 
+      {/* Modal overlay + centered dialog */}
       <AnimatePresence>
         {open && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-sm flex items-end justify-center"
-            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={handleClose}
           >
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-card rounded-t-2xl p-6 pb-8 shadow-card-lg"
+              className="w-full max-w-md bg-card rounded-2xl p-6 shadow-card-lg max-h-[85vh] overflow-y-auto"
             >
+              {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-foreground">Dodaj aktywność</h3>
-                <button onClick={() => setOpen(false)} className="p-1 rounded-full hover:bg-secondary">
+                <button onClick={handleClose} className="p-1.5 rounded-full hover:bg-secondary transition-colors">
                   <X className="h-5 w-5 text-muted-foreground" />
                 </button>
               </div>
@@ -90,7 +100,7 @@ export function AddActivity({ categories, onAdd }: AddActivityProps) {
                 })}
               </div>
 
-              {/* Time input */}
+              {/* Time input - only shown after selecting category */}
               {selectedCategory && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -130,7 +140,7 @@ export function AddActivity({ categories, onAdd }: AddActivityProps) {
                     ))}
                   </div>
 
-                  {/* Custom input */}
+                  {/* Custom input + submit button */}
                   <div className="flex items-center gap-3">
                     <input
                       type="number"
@@ -140,7 +150,7 @@ export function AddActivity({ categories, onAdd }: AddActivityProps) {
                       onChange={(e) => setMinutes(Number(e.target.value))}
                       className="flex-1 h-10 px-3 rounded-lg bg-secondary text-foreground text-sm border-0 focus:ring-2 ring-primary outline-none"
                     />
-                    <Button onClick={handleAdd} className="h-10 px-6">
+                    <Button onClick={handleAdd} className="h-10 px-6 shrink-0">
                       Dodaj
                     </Button>
                   </div>
