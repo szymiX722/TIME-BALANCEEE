@@ -1,10 +1,15 @@
-/* Stats page - weekly & monthly views */
-import { useState, useMemo } from 'react';
+/* Stats page - weekly & monthly views + mood/dopamine correlation */
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth } from 'date-fns';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  ScatterChart, Scatter, ZAxis,
+} from 'recharts';
+import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { MOOD_EMOJIS } from '@/components/MoodSelector';
 
 interface StatsProps {
   store: ReturnType<typeof import('@/hooks/useAppStore').useAppStore>;
