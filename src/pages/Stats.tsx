@@ -17,10 +17,28 @@ interface StatsProps {
 
 export default function Stats({ store }: StatsProps) {
   const { state, getDayData } = store;
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<'week' | 'month'>('week');
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthDate, setMonthDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  // Deep link from heatmap: ?day=YYYY-MM-DD opens the day in month view
+  useEffect(() => {
+    const d = searchParams.get('day');
+    if (d) {
+      setView('month');
+      setSelectedDay(d);
+      setMonthDate(new Date(d));
+    }
+  }, [searchParams]);
+
+  // Mood vs Dopamine correlation data
+  const moodCorrelation = useMemo(() => {
+    return Object.values(state.days)
+      .filter(d => d.journal?.mood && d.entries.length > 0)
+      .map(d => ({ mood: d.journal!.mood, dopamine: d.dopamineScore, date: d.date }));
+  }, [state.days]);
 
   // Weekly data
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
