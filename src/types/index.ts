@@ -15,10 +15,43 @@ export interface ActivityEntry {
   timestamp: number; // Date.now()
 }
 
+export interface JournalEntry {
+  text: string;
+  mood: number; // 1-5
+}
+
 export interface DayData {
   date: string; // YYYY-MM-DD
   entries: ActivityEntry[];
   dopamineScore: number;
+  journal?: JournalEntry;
+  xpEarned?: number; // XP earned this day (for CSV export)
+}
+
+export type GoalPeriod = 'daily' | 'weekly';
+
+export interface Goal {
+  id: string;
+  name: string;
+  categoryId: string;
+  targetMinutes: number;
+  period: GoalPeriod;
+  createdAt: number;
+  rewardXP: number;
+  rewardCoins: number;
+}
+
+export interface GoalCompletion {
+  goalId: string;
+  periodKey: string; // 'YYYY-MM-DD' for daily, 'YYYY-Www' for weekly
+  completedAt: number;
+}
+
+export interface ActiveTimer {
+  startTime: number;        // ms timestamp when started/resumed
+  accumulatedMs: number;    // total ms accumulated before current run
+  categoryId: string;
+  isRunning: boolean;
 }
 
 export interface Quest {
@@ -56,6 +89,8 @@ export interface UserData {
   streak: number;
   lastActiveDate: string;
   darkMode: boolean;
+  xp: number;
+  level: number;
 }
 
 export interface AppState {
@@ -65,7 +100,35 @@ export interface AppState {
   activeQuests: string[]; // IDs of currently active quests (max 3)
   questProgress: QuestProgress[];
   user: UserData;
+  goals: Goal[];
+  goalCompletions: GoalCompletion[];
+  activeTimer: ActiveTimer | null;
   undoStack: Array<{ type: string; data: unknown }>;
+}
+
+/* ===== XP / Level system ===== */
+/** XP awarded for various actions */
+export const XP_REWARDS = {
+  ADD_ACTIVITY: 10,
+  COMPLETE_QUEST: 50,
+  COMPLETE_GOAL: 75,
+  JOURNAL_ENTRY: 15,
+} as const;
+
+/** Cumulative XP required to reach each level (index = level). Exponential-ish curve. */
+export function xpRequiredForLevel(level: number): number {
+  // L1=0, L2=100, L3=250, L4=500, L5=850, L6=1300, L7=1850 ...
+  if (level <= 1) return 0;
+  return Math.round(50 * level * (level - 1) + 50 * (level - 1));
+}
+
+export function levelFromXP(xp: number): { level: number; currentLevelXP: number; nextLevelXP: number; progress: number } {
+  let level = 1;
+  while (xpRequiredForLevel(level + 1) <= xp) level++;
+  const currentLevelXP = xpRequiredForLevel(level);
+  const nextLevelXP = xpRequiredForLevel(level + 1);
+  const progress = (xp - currentLevelXP) / (nextLevelXP - currentLevelXP);
+  return { level, currentLevelXP, nextLevelXP, progress };
 }
 
 export const DEFAULT_CATEGORIES: Category[] = [
