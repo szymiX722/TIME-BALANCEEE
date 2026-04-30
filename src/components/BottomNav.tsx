@@ -1,5 +1,5 @@
 /* Bottom navigation bar - Apple-style tab bar */
-import { LayoutDashboard, BarChart3, Sword, ShoppingBag, Settings } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Sword, Target, Settings } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -7,7 +7,7 @@ const tabs = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/stats', label: 'Statystyki', icon: BarChart3 },
   { path: '/quests', label: 'Questy', icon: Sword },
-  { path: '/shop', label: 'Sklep', icon: ShoppingBag },
+  { path: '/goals', label: 'Cele', icon: Target },
   { path: '/settings', label: 'Ustawienia', icon: Settings },
 ];
 
