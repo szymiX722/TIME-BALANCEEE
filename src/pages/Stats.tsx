@@ -1,10 +1,15 @@
-/* Stats page - weekly & monthly views */
-import { useState, useMemo } from 'react';
+/* Stats page - weekly & monthly views + mood/dopamine correlation */
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth } from 'date-fns';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  ScatterChart, Scatter, ZAxis,
+} from 'recharts';
+import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { MOOD_EMOJIS } from '@/components/MoodSelector';
 
 interface StatsProps {
   store: ReturnType<typeof import('@/hooks/useAppStore').useAppStore>;
@@ -12,10 +17,28 @@ interface StatsProps {
 
 export default function Stats({ store }: StatsProps) {
   const { state, getDayData } = store;
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<'week' | 'month'>('week');
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthDate, setMonthDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  // Deep link from heatmap: ?day=YYYY-MM-DD opens the day in month view
+  useEffect(() => {
+    const d = searchParams.get('day');
+    if (d) {
+      setView('month');
+      setSelectedDay(d);
+      setMonthDate(new Date(d));
+    }
+  }, [searchParams]);
+
+  // Mood vs Dopamine correlation data
+  const moodCorrelation = useMemo(() => {
+    return Object.values(state.days)
+      .filter(d => d.journal?.mood && d.entries.length > 0)
+      .map(d => ({ mood: d.journal!.mood, dopamine: d.dopamineScore, date: d.date }));
+  }, [state.days]);
 
   // Weekly data
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
@@ -200,7 +223,7 @@ export default function Stats({ store }: StatsProps) {
           </div>
 
           {/* Day detail */}
-          {selectedDayData && selectedDayData.entries.length > 0 && (
+          {selectedDayData && (selectedDayData.entries.length > 0 || selectedDayData.journal) && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -209,22 +232,80 @@ export default function Stats({ store }: StatsProps) {
               <h3 className="text-sm font-medium text-foreground mb-3">
                 {format(new Date(selectedDay!), 'd MMMM yyyy', { locale: pl })}
               </h3>
-              <div className="space-y-2">
-                {selectedDayData.entries.map(entry => {
-                  const cat = state.categories.find(c => c.id === entry.categoryId);
-                  return (
-                    <div key={entry.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${cat?.color || '0 0% 60%'})` }} />
-                        <span className="text-sm text-foreground">{cat?.name}</span>
+              {selectedDayData.entries.length > 0 && (
+                <div className="space-y-2">
+                  {selectedDayData.entries.map(entry => {
+                    const cat = state.categories.find(c => c.id === entry.categoryId);
+                    return (
+                      <div key={entry.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${cat?.color || '0 0% 60%'})` }} />
+                          <span className="text-sm text-foreground">{cat?.name}</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">{entry.minutes} min</span>
                       </div>
-                      <span className="text-sm text-muted-foreground">{entry.minutes} min</span>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedDayData.journal && (selectedDayData.journal.text || selectedDayData.journal.mood > 0) && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  {selectedDayData.journal.mood > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Nastrój:</span>
+                      <span className="text-lg">{MOOD_EMOJIS[selectedDayData.journal.mood - 1]}</span>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                  {selectedDayData.journal.text && (
+                    <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{selectedDayData.journal.text}</p>
+                  )}
+                </div>
+              )}
               <div className="mt-3 pt-3 border-t border-border">
                 <p className="text-xs text-muted-foreground">Dopamine Score: {selectedDayData.dopamineScore}/100</p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Mood vs Dopamine correlation */}
+          {moodCorrelation.length >= 3 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card rounded-2xl p-4 shadow-card"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-medium text-foreground">Nastrój vs Dopamine Score</h3>
+              </div>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart>
+                    <XAxis
+                      type="number" dataKey="mood" domain={[0.5, 5.5]} ticks={[1, 2, 3, 4, 5]}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={(v: number) => MOOD_EMOJIS[v - 1] || ''}
+                    />
+                    <YAxis
+                      type="number" dataKey="dopamine" domain={[0, 100]}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <ZAxis range={[60, 60]} />
+                    <Tooltip
+                      cursor={{ strokeDasharray: '3 3' }}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                      }}
+                      formatter={(value: number, name: string) => [value, name === 'mood' ? 'Nastrój' : 'Dopamine']}
+                    />
+                    <Scatter data={moodCorrelation} fill="hsl(var(--primary))" />
+                  </ScatterChart>
+                </ResponsiveContainer>
               </div>
             </motion.div>
           )}

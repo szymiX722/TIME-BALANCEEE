@@ -1,10 +1,15 @@
-/* Dashboard page - daily time tracking overview */
+/* Dashboard page - daily time tracking overview with timer, journal, XP, heatmap */
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Undo2, Flame, Clock } from 'lucide-react';
+import { Undo2, Flame, Clock, ShoppingBag } from 'lucide-react';
 import { DopamineBar } from '@/components/DopamineBar';
 import { AddActivity } from '@/components/AddActivity';
+import { XPBar } from '@/components/XPBar';
+import { Timer } from '@/components/Timer';
+import { Journal } from '@/components/Journal';
+import { Heatmap } from '@/components/Heatmap';
 import { getIcon } from '@/lib/icons';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -14,7 +19,11 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ store }: DashboardProps) {
-  const { state, getTodayData, addEntry, removeEntry, undo, today } = store;
+  const navigate = useNavigate();
+  const {
+    state, getTodayData, addEntry, removeEntry, undo, today, setJournal,
+    startTimer, pauseTimer, resumeTimer, stopTimer, cancelTimer,
+  } = store;
   const dayData = getTodayData();
 
   const totalMinutes = dayData.entries.reduce((s, e) => s + e.minutes, 0);
@@ -41,7 +50,7 @@ export default function Dashboard({ store }: DashboardProps) {
 
   const stagger = {
     hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+    show: { opacity: 1, transition: { staggerChildren: 0.06 } },
   };
   const fadeUp = {
     hidden: { opacity: 0, y: 16 },
@@ -66,6 +75,13 @@ export default function Dashboard({ store }: DashboardProps) {
             </div>
           )}
           <button
+            onClick={() => navigate('/shop')}
+            className="p-2 rounded-xl bg-secondary hover:bg-accent transition-colors"
+            aria-label="Sklep"
+          >
+            <ShoppingBag className="h-4 w-4 text-foreground" />
+          </button>
+          <button
             onClick={undo}
             disabled={state.undoStack.length === 0}
             className="p-2 rounded-xl bg-secondary hover:bg-accent disabled:opacity-30 transition-colors"
@@ -73,6 +89,24 @@ export default function Dashboard({ store }: DashboardProps) {
             <Undo2 className="h-4 w-4 text-foreground" />
           </button>
         </div>
+      </motion.div>
+
+      {/* XP / Level bar */}
+      <motion.div variants={fadeUp} className="bg-card rounded-2xl p-4 shadow-card">
+        <XPBar xp={state.user.xp} />
+      </motion.div>
+
+      {/* Live Timer */}
+      <motion.div variants={fadeUp}>
+        <Timer
+          activeTimer={state.activeTimer}
+          categories={state.categories}
+          onStart={startTimer}
+          onPause={pauseTimer}
+          onResume={resumeTimer}
+          onStop={stopTimer}
+          onCancel={cancelTimer}
+        />
       </motion.div>
 
       {/* Day progress */}
@@ -154,6 +188,22 @@ export default function Dashboard({ store }: DashboardProps) {
       {/* Dopamine Score */}
       <motion.div variants={fadeUp} className="bg-card rounded-2xl p-4 shadow-card">
         <DopamineBar score={dayData.dopamineScore} />
+      </motion.div>
+
+      {/* Heatmap (last 91 days) */}
+      <motion.div variants={fadeUp} className="bg-card rounded-2xl p-4 shadow-card">
+        <h2 className="text-sm font-medium text-foreground mb-3">Aktywność (90 dni)</h2>
+        <Heatmap
+          days={state.days}
+          range={91}
+          metric="dopamine"
+          onDayClick={(date) => navigate(`/stats?day=${date}`)}
+        />
+      </motion.div>
+
+      {/* Journal */}
+      <motion.div variants={fadeUp} className="bg-card rounded-2xl p-4 shadow-card">
+        <Journal date={today} initial={dayData.journal} onSave={setJournal} />
       </motion.div>
 
       {/* Today's entries */}

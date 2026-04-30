@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Stats from "./pages/Stats";
 import Quests from "./pages/Quests";
 import Shop from "./pages/Shop";
+import GoalsPage from "./pages/GoalsPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -51,6 +52,7 @@ function AppContent() {
           <Route path="/" element={<Dashboard store={store} />} />
           <Route path="/stats" element={<Stats store={store} />} />
           <Route path="/quests" element={<Quests store={store} />} />
+          <Route path="/goals" element={<GoalsPage store={store} />} />
           <Route path="/shop" element={<Shop store={store} />} />
           <Route path="/settings" element={<SettingsPage store={store} />} />
           <Route path="*" element={<NotFound />} />
